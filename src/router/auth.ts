@@ -1,16 +1,14 @@
 import express from "express";
 const router = express.Router();
 
-router.get("/login", (_, res) => {
-  res.status(200).send("Mmm... Pizza... 🍕");
+router.post("/users", (req, res) => {
+  const  authorization  = req.headers["authorization"];
+  res.status(201).json({ message: "User created", data:  authorization  });
 });
 
-router.get("/cookie", (_, res) => {
-  res.status(200).send("Get some Cookie... 🍪");
-});
-
-router.get("/donut", (_, res) => {
-  res.status(200).send("Do Not... 🍩");
+router.get("/me", (_, res) => {
+  
+  res.status(200);
 });
 
 export default router;

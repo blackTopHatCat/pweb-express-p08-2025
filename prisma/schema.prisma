@@ -1,0 +1,108 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// User Model (Table: users)
+// Note: Only 'email' is explicitly marked as unique based on your schema.
+model User {
+  id          String    @id @default(uuid())
+  username    String    // text
+  password    String    // text [not null]
+  email       String    @unique // text [not null, unique]
+  created_at  DateTime  @default(now())
+  updated_at  DateTime  @updatedAt
+
+  // Relationship: One user can have many orders
+  orders      Order[]
+
+  @@map("users")
+}
+
+// Genre Model (Table: genres)
+model Genre {
+  id          String    @id @default(uuid())
+  name        String    @unique // text [not null, unique]
+  created_at  DateTime  @default(now())
+  updated_at  DateTime  @updatedAt
+  deleted_at  DateTime? // Soft delete field
+
+  // Relationship: One genre can have many books
+  books       Book[]
+
+  @@map("genres")
+}
+
+// Book Model (Table: books)
+model Book {
+  id                String    @id @default(uuid())
+  title             String    @unique // text [not null, unique]
+  writer            String
+  publisher         String
+  publication_year  Int
+  description       String?   // text (nullable)
+  price             Decimal   // Using Decimal for the 'number' type for precision
+  stock_quantity    Int
+
+  // Foreign Key to Genre (genre_id uuid [ref: > genres.id, not null])
+  genre_id          String
+  genre             Genre     @relation(fields: [genre_id], references: [id])
+
+  created_at        DateTime  @default(now())
+  updated_at        DateTime  @updatedAt
+  deleted_at        DateTime?
+
+  // Relationship: Many-to-Many through OrderItem
+  order_items       OrderItem[]
+
+  @@map("books")
+}
+
+// Order Model (Table: orders)
+model Order {
+  id          String    @id @default(uuid())
+
+  // Foreign Key to User (user_id uuid [ref: > users.id, not null])
+  user_id     String
+  user        User      @relation(fields: [user_id], references: [id])
+
+  created_at  DateTime  @default(now())
+  updated_at  DateTime  @updatedAt
+
+  // Relationship: One order can have many items
+  items       OrderItem[]
+
+  @@map("orders")
+}
+
+// OrderItem Model (Table: order_items)
+// This is the junction table for the many-to-many relationship between Order and Book.
+model OrderItem {
+  id          String    @id @default(uuid())
+  quantity    Int
+
+  // Foreign Keys (order_id & book_id are not null)
+  order_id    String
+  order       Order     @relation(fields: [order_id], references: [id])
+
+  book_id     String
+  book        Book      @relation(fields: [book_id], references: [id])
+
+  created_at  DateTime  @default(now())
+  updated_at  DateTime  @updatedAt
+
+  // Enforces that an order can only contain one line item per book
+  @@unique([order_id, book_id])
+  @@map("order_items")
+}
