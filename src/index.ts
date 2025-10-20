@@ -1,4 +1,5 @@
 import express from "express";
+import router from "./router"; 
 
 const app = express();
 
@@ -8,6 +9,8 @@ app.use(express.json());
 app.get("/", (_, response) => {
   response.status(200).send("Server is up and running");
 });
+
+app.use(router);
 
 const PORT = 4000;
 app.listen(PORT, () => {
