@@ -1,13 +1,18 @@
+// src/controllers/userController.ts
+
 import { Request, Response } from 'express';
 import prisma from '../config/prisma';
 
 import jwt from "jsonwebtoken";
 import crypto from 'crypto';
-import bcrypt from 'bcrypt';
+// Import type untuk AuthenticatedRequest
+import { AuthenticatedRequest } from '../middleware/authMiddleware'; 
 
-// Use a strong secret or asymmetric keys
+// NOTE: JWT_SECRET ini juga digunakan di authMiddleware.ts
 const JWT_SECRET = process.env.JWT_SECRET || crypto.randomBytes(32).toString('hex');
 
+
+// --- REGISTER ---
 export const createUser = async (req: Request, res: Response) => {
   try {
     const { email, username, password } = req.body;
@@ -17,9 +22,6 @@ export const createUser = async (req: Request, res: Response) => {
       return res.status(400).json({ 
         success: false,
         message: 'Email and password are required',
-        email,
-        username,
-        password
       });
     }
 
@@ -29,9 +31,9 @@ export const createUser = async (req: Request, res: Response) => {
     });
 
     if (existingUser) {
-      return res.status(400).json({ 
+      return res.status(409).json({ // 409 Conflict
         "success": false,
-        "error": 'Email has already been used',
+        "message": 'Email has already been used',
       });
     }
 
@@ -40,7 +42,7 @@ export const createUser = async (req: Request, res: Response) => {
       data: {
         email,
         username,
-        password // NOTE: hash password terlebih dahulu untuk real-case
+        password // NOTE: Hash password terlebih dahulu untuk production
       },
       select: {
         id: true,
@@ -60,51 +62,107 @@ export const createUser = async (req: Request, res: Response) => {
     console.error(error);
     res.status(500).json({ 
       success: false,
-      message: 'Something went wrong..',
+      message: 'Failed to register user.',
     });
   }
 };
 
+// --- LOGIN ---
 export const loginUser = async (req: Request, res: Response) => {
   try {
     const { email, password } = req.body
     
+    // Validasi input
+    if (!email || !password) {
+      return res.status(400).json({ 
+        success: false,
+        message: 'Email and password are required',
+      });
+    }
+
     const searchUser = await prisma.user.findUnique({
       where: { email }
     });
     
     if (!searchUser) {
-      return res.status(400).json({ 
+      return res.status(404).json({ // 404 Not Found
         success: false,
-        error: 'Email not listed',
+        message: 'User with this email not found.',
       });
-    } else if (searchUser.password != password) {
-      return res.status(400).json({
+    } 
+    
+    // NOTE: Dalam kasus nyata, gunakan bcrypt.compare(password, searchUser.password)
+    if (searchUser.password !== password) {
+      return res.status(401).json({ // 401 Unauthorized
         "success": false,
         "message": "Invalid credentials",
       });
-    } else if (searchUser.password == password) {
-      const payload = {
-        sub: email,
-      };
-      const access_token = jwt.sign(payload, JWT_SECRET, {
-        expiresIn: '15m',
-        issuer: 'secure-app',
-        audience: 'secure-app-users',
-        jwtid: crypto.randomUUID()
-      });
-      
-      return res.status(201).json({
-        "success": true,
-        "message": "Login successfully",
-        "data": access_token,
-      });
     }
+    
+    // Beri token JWT
+    const payload = {
+      id: searchUser.id,
+      email: searchUser.email,
+      username: searchUser.username
+    };
+    
+    const access_token = jwt.sign(payload, JWT_SECRET, {
+      expiresIn: '2h', // Token berlaku 2 jam
+      issuer: 'secure-app',
+      audience: 'secure-app-users',
+      jwtid: crypto.randomUUID()
+    });
+    
+    return res.status(200).json({
+      "success": true,
+      "message": "Login successful.",
+      "data": {
+        "id": searchUser.id,
+        "email": searchUser.email,
+        "username": searchUser.username,
+        "access_token": access_token
+      }
+    });
   } catch (error) {
     console.error(error);
-    res.status(500).json({ 
+    res.status(500).json({
       success: false,
-      message: 'Something went wrong..',
+      message: 'Failed to login.',
     });
   }
 };
+
+
+// --- GET ME (Mendapatkan Profil Pengguna) ---
+// Menggunakan AuthenticatedRequest karena rute ini dilindungi oleh middleware JWT
+export const getMe = async (req: AuthenticatedRequest, res: Response) => {
+    try {
+        const userId = req.user?.id;
+        
+        if (!userId) {
+            // Ini seharusnya ditangani oleh middleware, tapi sebagai fail-safe
+            return res.status(401).json({ success: false, message: 'Unauthorized.' });
+        }
+
+        const user = await prisma.user.findUnique({
+            where: { id: userId },
+            select: {
+                id: true,
+                email: true,
+                username: true,
+                created_at: true,
+                updated_at: true,
+            }
+        });
+
+        if (!user) {
+            return res.status(404).json({ success: false, message: 'User profile not found.' });
+        }
+
+        res.status(200).json({ success: true, data: user });
+
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ success: false, message: 'Failed to retrieve user profile.' });
+    }
+}
