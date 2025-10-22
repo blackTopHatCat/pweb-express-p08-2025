@@ -1,5 +1,3 @@
-// src/index.ts
-
 import express, { Application, Request, Response } from 'express';
 import dotenv from 'dotenv';
 import prisma from './config/prisma';
@@ -32,8 +30,7 @@ app.get('/', (_, res: Response) => {
 app.use('/auth', userRoutes);
 app.use('/books', bookRoutes); 
 app.use('/transactions', transactionRoutes); 
-app.use('/genres', genreRoutes); // Gunakan router genre
-
+app.use('/genre', genreRoutes); 
 // Handle 404
 app.use((req, res: Response) => {
   res.status(404).json({ 
